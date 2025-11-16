@@ -1,0 +1,48 @@
+name: proj
+description: A professional office attendance and task management app
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  
+  
+  # Database & Auth
+  supabase_flutter: ^2.0.0
+  
+  # File & Image Handling
+  file_picker: ^10.3.6
+  image_picker: ^1.0.4
+  open_file: ^3.2.1
+  
+  # Excel Export
+  excel: ^4.0.4
+  
+  # Storage & Paths
+  path_provider: ^2.0.15
+  shared_preferences: ^2.1.1
+  
+  # Date & Time
+  intl: ^0.20.2
+  timezone: ^0.10.1
+  
+  # Notifications
+  flutter_local_notifications: ^19.5.0
+  
+  # Permissions
+  permission_handler: ^12.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
