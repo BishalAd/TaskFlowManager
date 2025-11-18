@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/supabase_service.dart';
-// import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/task_model.dart';
 
 class EmployeeTasksPage extends StatefulWidget {
@@ -24,21 +23,21 @@ class _EmployeeTasksPageState extends State<EmployeeTasksPage> {
   }
 
   Future<void> _loadTasks() async {
-  final currentUser = await SupabaseService.getCurrentUser(); 
-  if (currentUser == null) return;
+    final currentUser = await SupabaseService.getCurrentUser();
+    if (currentUser == null) return;
 
-  final tasks = await SupabaseService.getTasks(
-    assignedTo: currentUser.id, 
-    dueDate: _selectedDate,
-    isCompleted: _showCompleted,
-  );
-  
-  setState(() {
-    _tasks.clear();
-    _tasks.addAll(tasks);
-    _isLoading = false;
-  });
-}
+    final tasks = await SupabaseService.getTasks(
+      assignedTo: currentUser.id,
+      dueDate: _selectedDate,
+      isCompleted: _showCompleted,
+    );
+
+    setState(() {
+      _tasks.clear();
+      _tasks.addAll(tasks);
+      _isLoading = false;
+    });
+  }
 
   void _toggleCompletedFilter() {
     setState(() {
@@ -48,13 +47,6 @@ class _EmployeeTasksPageState extends State<EmployeeTasksPage> {
     _loadTasks().then((_) => setState(() => _isLoading = false));
   }
 
-  void _showAddTaskDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AddPersonalTaskDialog(onTaskAdded: _loadTasks),
-    );
-  }
-
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -62,7 +54,7 @@ class _EmployeeTasksPageState extends State<EmployeeTasksPage> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    
+
     if (picked != null && picked != _selectedDate) {
       setState(() {
         _selectedDate = picked;
@@ -72,12 +64,21 @@ class _EmployeeTasksPageState extends State<EmployeeTasksPage> {
     }
   }
 
+  void _showAddTaskDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AddPersonalTaskDialog(
+        onTaskAdded: _loadTasks,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          // Header with Date Selection
+          // Header
           Card(
             margin: const EdgeInsets.all(16),
             child: Padding(
@@ -94,7 +95,9 @@ class _EmployeeTasksPageState extends State<EmployeeTasksPage> {
                   const SizedBox(width: 12),
                   IconButton(
                     icon: Icon(
-                      _showCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                      _showCompleted
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
                       color: const Color(0xFFFF7A00),
                     ),
                     onPressed: _toggleCompletedFilter,
@@ -104,7 +107,8 @@ class _EmployeeTasksPageState extends State<EmployeeTasksPage> {
               ),
             ),
           ),
-          // Tasks List
+
+          // Tasks list
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -129,6 +133,7 @@ class _EmployeeTasksPageState extends State<EmployeeTasksPage> {
           ),
         ],
       ),
+
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddTaskDialog,
         backgroundColor: const Color(0xFFFF7A00),
@@ -157,7 +162,7 @@ class _EmployeeTaskCardState extends State<EmployeeTaskCard> {
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
@@ -167,7 +172,7 @@ class _EmployeeTaskCardState extends State<EmployeeTaskCard> {
         leading: Checkbox(
           value: task.isCompleted,
           onChanged: (value) async {
-            if (value != null) {
+            if (value != null && task.id != null) {
               await SupabaseService.updateTask(
                 task.copyWith(isCompleted: value),
               );
@@ -180,7 +185,8 @@ class _EmployeeTaskCardState extends State<EmployeeTaskCard> {
           task.title,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+            decoration:
+                task.isCompleted ? TextDecoration.lineThrough : null,
           ),
         ),
         subtitle: Column(
@@ -210,31 +216,28 @@ class _EmployeeTaskCardState extends State<EmployeeTaskCard> {
                 ),
               ],
             ),
-            if (task.dueTime != null) ...[
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    size: 12,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    task.dueTime!.substring(0, 5),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+            if (task.dueTime != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time,
+                        size: 12, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      task.dueTime!.substring(0, 5),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ],
           ],
         ),
-        trailing: task.isRecurring
-            ? const Icon(Icons.repeat, color: Color(0xFFFF7A00))
-            : null,
+        trailing:
+            task.isRecurring ? const Icon(Icons.repeat, color: Color(0xFFFF7A00)) : null,
       ),
     );
   }
@@ -253,28 +256,30 @@ class _AddPersonalTaskDialogState extends State<AddPersonalTaskDialog> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   DateTime _selectedDate = DateTime.now();
   TimeOfDay? _selectedTime;
   bool _isRecurring = false;
 
   Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
     );
-    if (picked != null && picked != _selectedDate) {
+
+    if (picked != null) {
       setState(() => _selectedDate = picked);
     }
   }
 
   Future<void> _selectTime() async {
-    final TimeOfDay? picked = await showTimePicker(
+    final picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime ?? TimeOfDay.now(),
     );
+
     if (picked != null) {
       setState(() => _selectedTime = picked);
     }
@@ -287,10 +292,10 @@ class _AddPersonalTaskDialogState extends State<AddPersonalTaskDialog> {
     if (currentUser == null) return;
 
     final task = Task(
-      id: '',
+      id: null, // NEW → allow Supabase to generate id
       title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty 
-          ? null 
+      description: _descriptionController.text.trim().isEmpty
+          ? null
           : _descriptionController.text.trim(),
       assignedTo: currentUser.id,
       assignedBy: currentUser.id,
@@ -305,8 +310,9 @@ class _AddPersonalTaskDialogState extends State<AddPersonalTaskDialog> {
     );
 
     await SupabaseService.createTask(task);
+
     widget.onTaskAdded();
-    
+
     if (mounted) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -338,20 +344,21 @@ class _AddPersonalTaskDialogState extends State<AddPersonalTaskDialog> {
                 ),
               ),
               const SizedBox(height: 20),
+
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(
                   labelText: 'Task Title *',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter task title';
-                  }
-                  return null;
-                },
+                validator: (value) =>
+                    (value == null || value.isEmpty)
+                        ? 'Please enter task title'
+                        : null,
               ),
+
               const SizedBox(height: 16),
+
               TextFormField(
                 controller: _descriptionController,
                 decoration: const InputDecoration(
@@ -360,15 +367,17 @@ class _AddPersonalTaskDialogState extends State<AddPersonalTaskDialog> {
                 ),
                 maxLines: 3,
               ),
+
               const SizedBox(height: 16),
-              // Date and Time
+
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _selectDate,
                       icon: const Icon(Icons.calendar_today),
-                      label: Text(DateFormat('MMM d, y').format(_selectedDate)),
+                      label:
+                          Text(DateFormat('MMM d, y').format(_selectedDate)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -383,33 +392,23 @@ class _AddPersonalTaskDialogState extends State<AddPersonalTaskDialog> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 16),
-              // Recurring Option
+
               Row(
                 children: [
                   Checkbox(
                     value: _isRecurring,
-                    onChanged: (value) {
-                      setState(() => _isRecurring = value ?? false);
-                    },
+                    onChanged: (value) =>
+                        setState(() => _isRecurring = value ?? false),
                     activeColor: const Color(0xFFFF7A00),
                   ),
                   const Text('Repeat Daily'),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  const Text(
-                    'Moves incomplete tasks to next day',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
                 ],
               ),
+
               const SizedBox(height: 24),
-              // Buttons
+
               Row(
                 children: [
                   Expanded(

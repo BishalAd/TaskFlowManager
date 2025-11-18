@@ -1,0 +1,154 @@
+-- Enable Row Level Security on all tables
+-- Users table (extends auth.users)
+CREATE TABLE IF NOT EXISTS users (
+  id UUID REFERENCES auth.users PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  role TEXT CHECK (role IN ('manager', 'employee')) NOT NULL,
+  full_name TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Attendance table
+CREATE TABLE IF NOT EXISTS attendance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  start_time TIMESTAMP WITH TIME ZONE,
+  end_time TIMESTAMP WITH TIME ZONE,
+  status TEXT CHECK (status IN ('present', 'leave')) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tasks table
+CREATE TABLE IF NOT EXISTS tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  assigned_to UUID REFERENCES users(id), -- NULL means assigned to all employees
+  assigned_by UUID REFERENCES users(id) NOT NULL,
+  due_date DATE NOT NULL,
+  due_time TIME,
+  is_recurring BOOLEAN DEFAULT FALSE,
+  is_completed BOOLEAN DEFAULT FALSE,
+  completed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  is_personal BOOLEAN DEFAULT FALSE -- For employee personal tasks
+);
+
+-- Reports table
+CREATE TABLE IF NOT EXISTS reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  image_url TEXT,
+  status TEXT CHECK (status IN ('open', 'resolved')) DEFAULT 'open',
+  manager_response TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Enable RLS
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+
+-- Users policies
+CREATE POLICY "Users can view all users" ON users FOR SELECT USING (true);
+CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
+
+-- Attendance policies
+CREATE POLICY "Users can view own attendance" ON attendance FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Managers can view all attendance" ON attendance FOR SELECT USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'manager')
+);
+CREATE POLICY "Users can insert own attendance" ON attendance FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own attendance" ON attendance FOR UPDATE USING (auth.uid() = user_id);
+
+-- Tasks policies
+CREATE POLICY "Users can view assigned tasks" ON tasks FOR SELECT USING (
+  auth.uid() = assigned_to OR 
+  assigned_to IS NULL OR 
+  auth.uid() = assigned_by OR
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'manager')
+);
+CREATE POLICY "Managers can insert tasks" ON tasks FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'manager')
+);
+CREATE POLICY "Users can insert personal tasks" ON tasks FOR INSERT WITH CHECK (
+  auth.uid() = assigned_to AND is_personal = true
+);
+CREATE POLICY "Users can update own tasks" ON tasks FOR UPDATE USING (
+  auth.uid() = assigned_to OR 
+  auth.uid() = assigned_by OR
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'manager')
+);
+CREATE POLICY "Managers can delete tasks" ON tasks FOR DELETE USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'manager')
+);
+
+-- Reports policies
+CREATE POLICY "Users can view own reports" ON reports FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Managers can view all reports" ON reports FOR SELECT USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'manager')
+);
+CREATE POLICY "Users can insert own reports" ON reports FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Managers can update reports" ON reports FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'manager')
+);
+
+-- Create storage bucket for reports
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('reports', 'reports', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Add storage policy for reports
+CREATE POLICY "Report images are publicly accessible" ON storage.objects
+FOR SELECT USING (bucket_id = 'reports');
+
+CREATE POLICY "Anyone can upload report images" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'reports');
+
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
+CREATE POLICY "Users can update own tasks" ON tasks FOR UPDATE USING (auth.uid() = assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tasks_is_completed ON tasks(is_completed);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
+CREATE INDEX IF NOT EXISTS idx_attendance_user_id ON attendance(user_id);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id);
+
+-- Function to automatically handle user creation
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.users (id, email, role, full_name)
+  VALUES (
+    new.id,
+    new.email,
+    'employee',
+    COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1))
+  );
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to automatically create user profile
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+  
+
+UPDATE users
+SET 
+  role = 'manager',
+  full_name = 'Admin User',
+  email = 'admin@onlinesewa.com'
+WHERE id = '6f55b4cf-0350-4157-b636-121956fdf610';

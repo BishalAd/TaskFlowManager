@@ -13,6 +13,8 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _rememberMe = false;
+
   bool _obscurePassword = true;
 
   Future<void> _signIn() async {
@@ -26,9 +28,14 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text.trim(),
       );
 
-      if (response.user != null) {
-        // User will be automatically redirected via AuthWrapper
-      }
+      if (response.session != null) {
+    if (_rememberMe) {
+      // Save session manually for permanent login
+      await Supabase.instance.client.auth.setSession(
+        response.session!.refreshToken!,
+      );
+    }
+  }
     } on AuthException catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -91,6 +98,8 @@ class _LoginPageState extends State<LoginPage> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                
+
                 const SizedBox(height: 8),
                 Text(
                   'Sign in to manage your tasks and attendance',
@@ -146,6 +155,19 @@ class _LoginPageState extends State<LoginPage> {
                     return null;
                   },
                 ),
+                Row(
+  children: [
+    Checkbox(
+      value: _rememberMe,
+      onChanged: (value) {
+        setState(() {
+          _rememberMe = value!;
+        });
+      },
+    ),
+    const Text("Remember me"),
+  ],
+),
                 const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,

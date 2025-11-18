@@ -264,7 +264,7 @@ class _TaskCardState extends State<TaskCard> {
     );
 
     if (confirmed == true) {
-      await SupabaseService.deleteTask(widget.task.id);
+      await SupabaseService.deleteTask(widget.task.id!);
       widget.onTaskUpdated();
     }
   }
@@ -323,23 +323,23 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
     final currentUser = await SupabaseService.getCurrentUser();
     if (currentUser == null) return;
 
-    final task = Task(
-      id: '',
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty 
-          ? null 
-          : _descriptionController.text.trim(),
-      assignedTo: _assignToAll ? null : _selectedEmployeeId,
-      assignedBy: currentUser.id,
-      dueDate: _selectedDate,
-      dueTime: _selectedTime != null
-          ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00'
-          : null,
-      isRecurring: _isRecurring,
-      isCompleted: false,
-      createdAt: DateTime.now(),
-      isPersonal: false,
-    );
+    // create task without setting id (leave model id as String or String?)
+final task = Task(
+  // do NOT set id here — keep your model's id value empty or a placeholder
+  id: null, // <- keep model happy; actual DB id will be generated
+  title: _titleController.text.trim(),
+  description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+  assignedTo: _assignToAll ? null : _selectedEmployeeId,
+  assignedBy: currentUser.id,
+  dueDate: _selectedDate,
+  dueTime: _selectedTime != null
+      ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00'
+      : null,
+  isRecurring: _isRecurring,
+  isCompleted: false,
+  createdAt: DateTime.now(),
+  isPersonal: true,
+);
 
     await SupabaseService.createTask(task);
     widget.onTaskAdded();

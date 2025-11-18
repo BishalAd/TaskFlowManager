@@ -1,5 +1,5 @@
 class Task {
-  final String id;
+  final String? id; // <-- optional for new tasks
   final String title;
   final String? description;
   final String? assignedTo;
@@ -14,7 +14,7 @@ class Task {
   final String? assignedUserName;
 
   Task({
-    required this.id,
+    this.id, // <-- no longer required
     required this.title,
     this.description,
     this.assignedTo,
@@ -29,9 +29,10 @@ class Task {
     this.assignedUserName,
   });
 
+  // ------------ FROM SUPABASE MAP ------------
   factory Task.fromMap(Map<String, dynamic> map) {
     return Task(
-      id: map['id'] as String,
+      id: map['id'] as String?, // nullable
       title: map['title'] as String,
       description: map['description'] as String?,
       assignedTo: map['assigned_to'] as String?,
@@ -45,15 +46,18 @@ class Task {
           : null,
       createdAt: DateTime.parse(map['created_at'] as String),
       isPersonal: map['is_personal'] as bool? ?? false,
-      assignedUserName: map['users'] != null 
+      assignedUserName: map['users'] != null
           ? (map['users'] as Map<String, dynamic>)['full_name'] as String?
           : null,
     );
   }
 
+  // ------------ TO SUPABASE MAP ------------
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
+      // Important: Do NOT send id during insert
+      if (id != null) 'id': id, 
+
       'title': title,
       'description': description,
       'assigned_to': assignedTo,
@@ -68,6 +72,7 @@ class Task {
     };
   }
 
+  // ------------ COPY WITH ------------
   Task copyWith({
     String? id,
     String? title,

@@ -21,7 +21,7 @@ class SupabaseService {
 
       return AppUser.fromMap(response);
     } catch (e) {
-      Text('Error getting current user: $e');
+      debugPrint('Error getting current user: $e');
       return null;
     }
   }
@@ -32,25 +32,23 @@ class SupabaseService {
           .from('users')
           .select()
           .eq('role', 'employee')
-          .order('full_name');
+          .order('full_name', ascending: true);
 
       return (response as List).map((user) => AppUser.fromMap(user)).toList();
     } catch (e) {
-      Text('Error getting employees: $e');
+      debugPrint('Error getting employees: $e');
       return [];
     }
   }
 
   static Future<void> createUser(AppUser user, String password) async {
     try {
-      // Create auth user
       final authResponse = await _supabase.auth.signUp(
         email: user.email,
         password: password,
       );
 
       if (authResponse.user != null) {
-        // Create user profile
         await _supabase.from('users').insert({
           'id': authResponse.user!.id,
           'email': user.email,
@@ -59,166 +57,130 @@ class SupabaseService {
         });
       }
     } catch (e) {
-      Text('Error creating user: $e');
-      rethrow;
+      debugPrint('Error creating user: $e');
+      throw Exception(e);
     }
   }
 
   // Task methods
-  static Future<List<Task>> getTasks({
-    String? assignedTo,
-    DateTime? dueDate,
-    bool? isCompleted,
-  }) async {
-    try {
-      // FIXED: Chain methods properly
-      if (assignedTo != null && dueDate != null && isCompleted != null) {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .eq('assigned_to', assignedTo)
-            .eq('due_date', dueDate.toIso8601String().split('T')[0])
-            .eq('is_completed', isCompleted)
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      } else if (assignedTo != null && dueDate != null) {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .eq('assigned_to', assignedTo)
-            .eq('due_date', dueDate.toIso8601String().split('T')[0])
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      } else if (assignedTo != null && isCompleted != null) {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .eq('assigned_to', assignedTo)
-            .eq('is_completed', isCompleted)
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      } else if (dueDate != null && isCompleted != null) {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .eq('due_date', dueDate.toIso8601String().split('T')[0])
-            .eq('is_completed', isCompleted)
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      } else if (assignedTo != null) {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .eq('assigned_to', assignedTo)
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      } else if (dueDate != null) {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .eq('due_date', dueDate.toIso8601String().split('T')[0])
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      } else if (isCompleted != null) {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .eq('is_completed', isCompleted)
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      } else {
-        final response = await _supabase
-            .from('tasks')
-            .select('*, users(full_name)')
-            .order('due_time')
-            .order('created_at');
-        return (response as List).map((task) => Task.fromMap(task)).toList();
-      }
-    } catch (e) {
-      Text('Error getting tasks: $e');
-      return [];
+static Future<List<Task>> getTasks({
+  String? assignedTo,
+  DateTime? dueDate,
+  bool? isCompleted,
+}) async {
+  try {
+    // START as filter builder
+    final filterQuery = _supabase
+        .from('tasks')
+        .select('*');    // must stay PostgrestFilterBuilder
+
+    // Apply filters
+    if (assignedTo != null) {
+      filterQuery.eq('assigned_to', assignedTo);
     }
+
+    if (dueDate != null) {
+      filterQuery.eq('due_date', dueDate.toIso8601String().split('T')[0]);
+    }
+
+    if (isCompleted != null) {
+      filterQuery.eq('is_completed', isCompleted);
+    }
+
+    // NOW apply order (does NOT break eq)
+    final query = filterQuery
+        .order('due_time', ascending: true)
+        .order('created_at', ascending: true);
+
+    final response = await query;
+
+    return (response as List)
+        .map((task) => Task.fromMap(task))
+        .toList();
+  } catch (e) {
+    Text('❌ Error getting tasks: $e');
+    return [];
   }
+}
+
+
 
   static Future<void> createTask(Task task) async {
     try {
       await _supabase.from('tasks').insert(task.toMap());
     } catch (e) {
-      Text('Error creating task: $e');
-      rethrow;
+      debugPrint('Error creating task: $e');
+      throw Exception(e);
     }
   }
 
   static Future<void> updateTask(Task task) async {
     try {
-      await _supabase.from('tasks').update(task.toMap()).eq('id', task.id);
+      await _supabase
+          .from('tasks')
+          .update(task.toMap())
+          .eq('id', task.id!);
     } catch (e) {
-      Text('Error updating task: $e');
-      rethrow;
+      debugPrint('Error updating task: $e');
+      throw Exception(e);
     }
   }
 
   static Future<void> deleteTask(String taskId) async {
     try {
-      await _supabase.from('tasks').delete().eq('id', taskId);
+      await _supabase
+          .from('tasks')
+          .delete()
+          .eq('id', taskId);
     } catch (e) {
-      Text('Error deleting task: $e');
-      rethrow;
+      debugPrint('Error deleting task: $e');
+      throw Exception(e);
     }
   }
-
   // Attendance methods
-  // Attendance methods
-static Future<void> markAttendance({
-  required String userId,
-  required String status,
-  DateTime? startTime,
-  DateTime? endTime,
-}) async {
-  try {
-    final now = DateTime.now();
-    
-    if (status == 'present') {
-      await _supabase.from('attendance').insert({
-        'user_id': userId,
-        'date': now.toIso8601String().split('T')[0],
-        'start_time': startTime?.toIso8601String() ?? now.toIso8601String(),
-        'status': 'present',
-      });
-    } else {
-      // ALTERNATIVE: Get the record first, then update if end_time is null
-      final todayAttendance = await _supabase
-          .from('attendance')
-          .select()
-          .eq('user_id', userId)
-          .eq('date', now.toIso8601String().split('T')[0])
-          .maybeSingle();
+  static Future<void> markAttendance({
+    required String userId,
+    required String status,
+    DateTime? startTime,
+    DateTime? endTime,
+  }) async {
+    try {
+      final now = DateTime.now();
 
-      if (todayAttendance != null && todayAttendance['end_time'] == null) {
-        await _supabase
+      if (status == 'present') {
+        await _supabase.from('attendance').insert({
+          'user_id': userId,
+          'date': now.toIso8601String().split('T')[0],
+          'start_time': startTime?.toIso8601String() ?? now.toIso8601String(),
+          'status': 'present',
+        });
+      } else {
+        final todayAttendance = await _supabase
             .from('attendance')
-            .update({
-              'end_time': endTime?.toIso8601String() ?? now.toIso8601String(),
-            })
-            .eq('id', todayAttendance['id'] as String);
+            .select()
+            .eq('user_id', userId)
+            .eq('date', now.toIso8601String().split('T')[0])
+            .maybeSingle();
+
+        if (todayAttendance != null && todayAttendance['end_time'] == null) {
+          await _supabase
+              .from('attendance')
+              .update({
+                'end_time': endTime?.toIso8601String() ?? now.toIso8601String(),
+              })
+              .eq('id', todayAttendance['id']);
+        }
       }
+    } catch (e) {
+      debugPrint('Error marking attendance: $e');
+      throw Exception(e);
     }
-  } catch (e) {
-    Text('Error marking attendance: $e');
-    rethrow;
   }
-}
 
   static Future<Map<String, dynamic>?> getTodayAttendance(String userId) async {
     try {
       final today = DateTime.now();
+
       final response = await _supabase
           .from('attendance')
           .select()
@@ -228,123 +190,123 @@ static Future<void> markAttendance({
 
       return response;
     } catch (e) {
-      Text('Error getting today attendance: $e');
+      debugPrint('Error getting today attendance: $e');
       return null;
     }
   }
-
   // Report methods
   static Future<List<Map<String, dynamic>>> getReports({String? userId}) async {
     try {
-      // FIXED: Chain methods properly
       if (userId != null) {
         final response = await _supabase
             .from('reports')
             .select('*, users(full_name)')
             .eq('user_id', userId)
             .order('created_at', ascending: false);
+
         return response;
       } else {
         final response = await _supabase
             .from('reports')
             .select('*, users(full_name)')
             .order('created_at', ascending: false);
+
         return response;
       }
     } catch (e) {
-      Text('Error getting reports: $e');
+      debugPrint('Error getting reports: $e');
       return [];
     }
   }
 
   static Future<void> updateReportStatus(String reportId, String status, {String? managerResponse}) async {
     try {
-      await _supabase.from('reports').update({
-        'status': status,
-        'manager_response': managerResponse,
-      }).eq('id', reportId);
+      await _supabase
+          .from('reports')
+          .update({
+            'status': status,
+            'manager_response': managerResponse,
+          })
+          .eq('id', reportId);
     } catch (e) {
-      Text('Error updating report status: $e');
-      rethrow;
+      debugPrint('Error updating report status: $e');
+      throw Exception(e);
     }
   }
 
-  // Report methods - ADD THESE TO YOUR EXISTING SupabaseService CLASS
-static Future<void> submitReport({
-  required String userId,
-  required String title,
-  required String description,
-  String? imageUrl,
-}) async {
-  try {
-    await _supabase.from('reports').insert({
-      'user_id': userId,
-      'title': title,
-      'description': description,
-      'image_url': imageUrl,
-      'status': 'open',
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  } catch (e) {
-    Text('Error submitting report: $e');
-    rethrow;
+  static Future<void> submitReport({
+    required String userId,
+    required String title,
+    required String description,
+    String? imageUrl,
+  }) async {
+    try {
+      await _supabase.from('reports').insert({
+        'user_id': userId,
+        'title': title,
+        'description': description,
+        'image_url': imageUrl,
+        'status': 'open',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Error submitting report: $e');
+      throw Exception(e);
+    }
   }
-}
 
-// Image upload method for reports
-static Future<String?> uploadReportImage(String imagePath) async {
-  try {
-    final file = File(imagePath);
-    final fileBytes = await file.readAsBytes();
-    final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    
-    final response = await _supabase.storage
-        .from('reports')
-        .uploadBinary(fileName, fileBytes);
-    
-    final publicUrl = _supabase.storage
-        .from('reports')
-        .getPublicUrl(fileName);
-    
-    return publicUrl;
-  } catch (e) {
-    Text('Error uploading report image: $e');
-    return null;
-  }
-}
+  static Future<String?> uploadReportImage(String imagePath) async {
+    try {
+      final file = File(imagePath);
+      final fileBytes = await file.readAsBytes();
+      final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-// Get reports for a specific user
-static Future<List<Map<String, dynamic>>> getUserReports(String userId) async {
-  try {
-    final response = await _supabase
-        .from('reports')
-        .select('*, users(full_name)')
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    
-    return response;
-  } catch (e) {
-    Text('Error getting user reports: $e');
-    return [];
-  }
-}
+      await _supabase.storage
+          .from('reports')
+          .uploadBinary(fileName, fileBytes);
 
-// Update report status (for managers)
-static Future<void> updateReport(String reportId, String status, {String? managerResponse}) async {
-  try {
-    await _supabase
-        .from('reports')
-        .update({
-          'status': status,
-          'manager_response': managerResponse,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', reportId);
-  } catch (e) {
-    Text('Error updating report: $e');
-    rethrow;
+      final publicUrl = _supabase.storage
+          .from('reports')
+          .getPublicUrl(fileName);
+
+      return publicUrl;
+    } catch (e) {
+      debugPrint('Error uploading report image: $e');
+      return null;
+    }
   }
-}
+
+  static Future<List<Map<String, dynamic>>> getUserReports(String userId) async {
+    try {
+      final response = await _supabase
+          .from('reports')
+          .select('*, users(full_name)')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      return response;
+    } catch (e) {
+      debugPrint('Error getting user reports: $e');
+      return [];
+    }
+  }
+
+  static Future<void> updateReport(String reportId, String status, {String? managerResponse}) async {
+    try {
+      await _supabase
+          .from('reports')
+          .update({
+            'status': status,
+            'manager_response': managerResponse,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', reportId);
+
+    } catch (e) {
+      debugPrint('Error updating report: $e');
+      throw Exception(e);
+    }
+  }
 
   // Analytics methods
   static Future<List<Map<String, dynamic>>> getAttendanceAnalytics({
@@ -352,7 +314,6 @@ static Future<void> updateReport(String reportId, String status, {String? manage
     String? userId,
   }) async {
     try {
-      // Add date filtering based on period
       final now = DateTime.now();
       DateTime startDate;
 
@@ -366,11 +327,10 @@ static Future<void> updateReport(String reportId, String status, {String? manage
         case 'yearly':
           startDate = DateTime(now.year - 1, now.month, now.day);
           break;
-        default: // daily
+        default:
           startDate = now;
       }
 
-      // FIXED: Chain methods properly with conditional logic
       if (userId != null) {
         final response = await _supabase
             .from('attendance')
@@ -378,6 +338,7 @@ static Future<void> updateReport(String reportId, String status, {String? manage
             .eq('user_id', userId)
             .gte('date', startDate.toIso8601String().split('T')[0])
             .order('date', ascending: false);
+
         return response;
       } else {
         final response = await _supabase
@@ -385,10 +346,11 @@ static Future<void> updateReport(String reportId, String status, {String? manage
             .select('*, users(full_name)')
             .gte('date', startDate.toIso8601String().split('T')[0])
             .order('date', ascending: false);
+
         return response;
       }
     } catch (e) {
-      Text('Error getting attendance analytics: $e');
+      debugPrint('Error getting attendance analytics: $e');
       return [];
     }
   }
@@ -398,8 +360,7 @@ static Future<void> updateReport(String reportId, String status, {String? manage
     try {
       final today = DateTime.now();
       final tomorrow = today.add(const Duration(days: 1));
-      
-      // FIXED: Chain methods properly
+
       final incompleteTasks = await _supabase
           .from('tasks')
           .select()
@@ -413,11 +374,11 @@ static Future<void> updateReport(String reportId, String status, {String? manage
             .update({
               'due_date': tomorrow.toIso8601String().split('T')[0],
             })
-            .eq('id', task['id'] as String);
+            .eq('id', task['id']);
       }
     } catch (e) {
-      Text('Error moving incomplete tasks: $e');
-      rethrow;
+      debugPrint('Error moving incomplete tasks: $e');
+      throw Exception(e);
     }
   }
 
@@ -431,7 +392,7 @@ static Future<void> updateReport(String reportId, String status, {String? manage
       final totalTasks = response.length;
       final completedTasks = response.where((task) => task['is_completed'] == true).length;
       final overdueTasks = response.where((task) {
-        final dueDate = DateTime.parse(task['due_date'] as String);
+        final dueDate = DateTime.parse(task['due_date']);
         return task['is_completed'] == false && dueDate.isBefore(now);
       }).length;
 
@@ -440,8 +401,9 @@ static Future<void> updateReport(String reportId, String status, {String? manage
         {'label': 'Completed', 'value': completedTasks},
         {'label': 'Overdue', 'value': overdueTasks},
       ];
+
     } catch (e) {
-      Text('Error getting task statistics: $e');
+      debugPrint('Error getting task statistics: $e');
       return [];
     }
   }
@@ -456,20 +418,20 @@ static Future<void> updateReport(String reportId, String status, {String? manage
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', userId);
+
     } catch (e) {
-      Text('Error updating user profile: $e');
-      rethrow;
+      debugPrint('Error updating user profile: $e');
+      throw Exception(e);
     }
   }
 
-  // Test connection method
   static Future<bool> testConnection() async {
     try {
-      final response = await _supabase.from('users').select().limit(1);
-      Text('✅ Supabase connection test successful');
+      await _supabase.from('users').select().limit(1);
+      debugPrint('✅ Supabase connection test successful');
       return true;
     } catch (e) {
-      Text('❌ Supabase connection test failed: $e');
+      debugPrint('❌ Supabase connection test failed: $e');
       return false;
     }
   }
